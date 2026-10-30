@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "NOT cheats for putt.day",
+  "version": "1337.1.2",
+  "description": "Adds info bar with location, angle and power indicators. Z - to return to the previous position.",
+  "icons": {
+    "128": "icon.png"
+  },
+  "content_scripts": [{
+    "matches": ["https://putt.day/*"],
+    "js": ["undo.js"],
+    "run_at": "document_start",
+    "world": "MAIN"
+  }]
+}
