@@ -1,3 +1,21 @@
+// ==UserScript==
+// @name         NOT cheats for putt.day
+// @namespace    https://github.com/MaxxKalashnikov/putt-day-notcheats
+// @version      1337.1.2
+// @description  Adds angle, power and position indicators. Press Z to return to the previous shot's position.
+// @author       MaxxKalashnikov
+// @homepageURL  https://github.com/MaxxKalashnikov/putt-day-notcheats
+// @source       https://github.com/MaxxKalashnikov/putt-day-notcheats
+// @downloadURL  https://raw.githubusercontent.com/MaxxKalashnikov/putt-day-notcheats/master/putt-day-notcheats.user.js
+// @updateURL    https://raw.githubusercontent.com/MaxxKalashnikov/putt-day-notcheats/master/putt-day-notcheats.user.js
+// @match        https://putt.day/*
+// @run-at       document-start
+// @inject-into  page
+// @sandbox      raw
+// @grant        none
+// @noframes
+// ==/UserScript==
+
 (() => {
   const KEY = 'z';
   const MAX_SHOT_SPEED = 10, MIN_PULL = 0.12, MAX_PULL = 1.8;
