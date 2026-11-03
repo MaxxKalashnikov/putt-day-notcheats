@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         NOT cheats for putt.day
 // @namespace    https://github.com/MaxxKalashnikov/putt-day-notcheats
-// @version      1337.1.2
-// @description  Adds angle, power and position indicators. Press Z to return to the previous shot's position.
+// @version      1337.2.0
+// @description  Adds shot, position, camera angle and zoom-distance indicators. Press Z to undo.
 // @author       MaxxKalashnikov
 // @homepageURL  https://github.com/MaxxKalashnikov/putt-day-notcheats
 // @source       https://github.com/MaxxKalashnikov/putt-day-notcheats
@@ -28,7 +28,7 @@
 
   const angleOf = (x, z) => (Math.atan2(-z, x) * 180 / Math.PI + 360) % 360;
   const fmt = s => `${s.angle.toFixed(1)}° · ${(s.power * 100).toFixed(0)}%`;
-  let status = '', where = '';
+  let status = '', where = '', view = '';
   function show(text) { status = text; render(); }
   function render() {
     if (typeof document === 'undefined') return;
@@ -38,17 +38,34 @@
         'font:13px/1.4 ui-monospace,monospace;color:#fff;background:#0009;padding:4px 8px;border-radius:6px;white-space:pre';
       document.documentElement.append(hud);
     }
-    hud.textContent = [status, where].filter(Boolean).join('\n');
+    hud.textContent = [status, where, view].filter(Boolean).join('\n');
   }
 
   function tick() {
+    let position = null;
     try {
       if (ball && raw) {
-        const [x, y, z] = take(raw.rawrigidbodyset_rbTranslation(ball.set, ball.h));
+        position = take(raw.rawrigidbodyset_rbTranslation(ball.set, ball.h));
+        const [x, y, z] = position;
         const line = `pos: x ${x.toFixed(2)}  y ${y.toFixed(2)}  z ${z.toFixed(2)}`;
         if (line !== where) { where = line; render(); }
       }
-    } catch {} 
+    } catch {}
+    let line = '';
+    try {
+      const cam = stateFor(document.querySelector('canvas'))?.camera;
+      if (cam) {
+        const V = cam.position.constructor, d = cam.getWorldDirection(new V());
+        const horizontal = Math.hypot(d.x, d.z);
+        const heading = horizontal > 1e-6 ? `${angleOf(d.x, d.z).toFixed(1)}°` : '—';
+        const tilt = Math.atan2(-d.y, horizontal) * 180 / Math.PI;
+        // The game zooms by moving the camera, not by changing camera.zoom.
+        const p = cam.getWorldPosition(new V());
+        const distance = position ? Math.hypot(p.x - position[0], p.y - position[1], p.z - position[2]).toFixed(2) : '—';
+        line = `camera: ${heading} · tilt ${tilt.toFixed(1)}°\nzoom distance: ${distance}`;
+      }
+    } catch {}
+    if (line !== view) { view = line; render(); }
     requestAnimationFrame(tick);
   }
   if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(tick);
