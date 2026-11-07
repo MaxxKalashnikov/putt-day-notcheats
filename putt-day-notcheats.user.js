@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NOT cheats for putt.day
 // @namespace    https://github.com/MaxxKalashnikov/putt-day-notcheats
-// @version      1337.2.0
+// @version      1337.2.1
 // @description  Adds shot, position, camera angle and zoom-distance indicators. Press Z to undo.
 // @author       MaxxKalashnikov
 // @homepageURL  https://github.com/MaxxKalashnikov/putt-day-notcheats
@@ -18,7 +18,7 @@
 
 (() => {
   const KEY = 'z';
-  const MAX_SHOT_SPEED = 10, MIN_PULL = 0.12, MAX_PULL = 1.8;
+  const MAX_SHOT_SPEED = 10, MIN_PULL = 0.12, MAX_PULL = 1.8, BALL_RADIUS = 0.06;
   const stack = []; 
   let raw = null, hud = null;
   let ball = null;
@@ -106,22 +106,34 @@
   WebAssembly.instantiate = (...a) => inst(...a).then(wrap);
   if (stream) WebAssembly.instantiateStreaming = (...a) => stream(...a).then(wrap);
 
-  function undo() {
-    const s = stack.pop();
+  async function undo() {
+    const s = stack.at(-1);
     if (!s || !raw) return;
+    const url = performance.getEntriesByType('resource').map(entry => entry.name)
+      .find(name => name.startsWith(location.origin + '/assets/runtime-') && name.endsWith('.js'));
+    if (!url) throw new Error('game runtime not found');
+    const game = Object.values(await import(url)).find(value =>
+      Array.isArray(value?.state?.lastLie) && typeof value.setState === 'function');
+    if (!game) throw new Error('game return point unavailable');
+    if (stack.at(-1) !== s) return;
     const [x, y, z] = s.pos;
+    // OOB uses lastLie, whose height excludes the ball radius, not the rigid body's centre.
+    game.setState(state => ({ ...state, lastLie: [x, y - BALL_RADIUS, z] }));
     const zero = raw.rawvector_new(0, 0, 0);
     raw.rawrigidbodyset_rbSetTranslation(s.set, s.h, x, y, z, true);
     raw.rawrigidbodyset_rbSetLinvel(s.set, s.h, zero, true);
     raw.rawrigidbodyset_rbSetAngvel(s.set, s.h, zero, true);
     raw.__wbg_rawvector_free(zero, 0);
+    stack.pop();
     show(`back to shot ${stack.length + 1} spot — you hit ${fmt(s)}`);
   }
 
   addEventListener('keydown', e => {
     if (e.key.toLowerCase() !== KEY || e.ctrlKey || e.metaKey || e.altKey) return;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable) return;
-    undo();
+    return undo().catch(error => {
+      show(`undo failed: ${error.message}`);
+    });
   });
 
   // --- live aim ---------------------------------------------------------------
