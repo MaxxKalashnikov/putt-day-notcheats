@@ -14,6 +14,35 @@ Camera heading uses the same angle convention as shots; tilt is positive when lo
 Relative zoom is `4.4 / camera-to-ball distance`: `1.00×` at the default distance of 4.4 game units, `2.20×` at distance 2, and `0.37×` at distance 12.
 It appears once the ball is detected and changes as you scroll or pinch to zoom.
 
+## Numeric shots
+
+The HUD's **aim:** row contains editable angle (°) and power (%) fields.
+Enter an angle from 0 to 360 and power from 0.1 to 100, then press **Enter** or **Space** in either field to shoot.
+Numeric shooting requires a keyboard.
+Enter and Space also shoot when neither field is focused, without intercepting other editable controls, buttons or links.
+Outside the controls, these shooting shortcuts ignore key repeats and Shift/Command/Control/Option modifiers.
+Angle and power accept hundredths and display two decimal places with leading zeros, such as `005.00`, so hundreds and tens remain selectable even for small values.
+Focusing or editing the numeric controls shows the game's normal power-and-direction indicator while the ball is ready.
+Typing and arrow shortcuts update the preview without taking a shot.
+The preview stays visible while rotating or zooming the camera, including camera switches with `T`.
+It clears when you interact with other UI controls, enter invalid values, shoot, undo, restart or grab the ball for mouse aiming.
+While a field is focused, **←/→** select a digit, skipping the decimal point, and **↓/↑** decrease/increase its place value with normal carrying and borrowing.
+Moving right past the last digit selects the other field's first digit; moving left past the first selects the other field's last digit.
+When neither field is focused, **←/→** decrease/increase angle by 1° and **↓/↑** decrease/increase power by 1 percentage point.
+Holding an arrow key repeats the adjustment; values stop at their limits.
+Power adjustments can reach `000.00` as a starting point, but shooting requires at least 0.1% power.
+Arrow shortcuts are ignored in other editable controls and while holding Shift/Command/Control/Option.
+The fields use text inputs for digit selection, with decimal keyboards on mobile and validation of the ranges above.
+Angles use world coordinates: 0° points toward +X, 90° toward −Z, 180° toward −X, and 270° toward +Z, regardless of the camera.
+Numeric shots use the game's normal firing path, including stroke counting, spin and ready-to-shoot checks.
+Mouse aiming and manual shots automatically fill the fields with the shot's angle (rounded to 0.01°) and power (rounded to 0.01%).
+Numeric shots and undo keep the entered values so you can fine-tune and shoot again.
+`R`, `Z`, `T`, `E` and `W` run their game or overlay shortcuts even while the numeric controls are focused, without inserting letters or moving focus.
+Enter, Space and these letter shortcuts ignore key repeats and Shift/Command/Control/Option modifiers in the numeric controls; Ctrl/Cmd+Z remains available for editing.
+Mouse aiming continues to work normally.
+The controls reuse the game's loaded runtime module; game updates that change its structure may require a userscript update.
+Values reset on page reload.
+
 ## Edge overlay
 
 | Shortcut | Action |
@@ -23,7 +52,8 @@ It appears once the ball is detected and changes as you scroll or pinch to zoom.
 | `X` | Toggle x-ray to show edges through objects |
 
 These shortcuts use the letters on your keyboard layout, not physical QWERTY key positions.
-Shortcuts are ignored while typing in editable fields or holding Shift/Command/Control/Option.
+Shortcuts are ignored while typing in editable fields, except that `E` and `W` also work in the numeric shot controls.
+They are ignored while holding Shift/Command/Control/Option.
 Holding a shortcut does not repeatedly toggle it.
 The default crease mode shows open boundaries and edges where faces meet at an angle of at least 15 degrees.
 Mode and x-ray choices apply when you next enable edges, and reset on page reload.

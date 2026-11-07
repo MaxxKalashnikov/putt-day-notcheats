@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         NOT cheats for putt.day
 // @namespace    https://github.com/MaxxKalashnikov/putt-day-notcheats
-// @version      1337.6.1
-// @description  Shot, position and camera indicators, plus mesh edges. Z: undo. E/W/X: edges/mode/x-ray.
+// @version      1337.7.0
+// @description  Numeric shot controls, position and camera indicators, plus mesh edges. Z: undo. E/W/X: edges/mode/x-ray.
 // @author       MaxxKalashnikov
 // @homepageURL  https://github.com/MaxxKalashnikov/putt-day-notcheats
 // @source       https://github.com/MaxxKalashnikov/putt-day-notcheats
@@ -20,8 +20,8 @@
   const KEY = 'z';
   const MAX_SHOT_SPEED = 10, MIN_PULL = 0.12, MAX_PULL = 1.8, BALL_RADIUS = 0.06;
   const stack = []; 
-  let raw = null, hud = null;
-  let ball = null;
+  let raw = null, hud = null, hudDetails = null, shotForm = null;
+  let ball = null, numericShot = null, numericPointer = null, clearNumericPreview = null;
   let game = null, strokes;
 
   const read = p => Array.from(new Float32Array(raw.memory.buffer, p + 4, 3));
@@ -29,26 +29,183 @@
 
   const angleOf = (x, z) => (Math.atan2(-z, x) * 180 / Math.PI + 360) % 360;
   const fmt = s => `${s.angle.toFixed(2).padStart(6)}° · ${(s.power * 100).toFixed(2).padStart(6)}%`;
-  let shotLabel = 'shot:', status = '', aiming = '', where = '', view = '';
-  function show(label, shot) { shotLabel = label; status = fmt(shot); aiming = ''; render(); }
+  let shotLabel = 'shot:', status = '', where = '', view = '';
+  function show(label, shot) { shotLabel = label; status = fmt(shot); render(); }
+  function fillAim(shot) {
+    shotForm.elements.angle.value = shot.angle.toFixed(2).padStart(6, '0');
+    shotForm.elements.power.value = Math.min(100, shot.power * 100).toFixed(2).padStart(6, '0');
+    shotForm.elements.angle.setCustomValidity('');
+    shotForm.elements.power.setCustomValidity('');
+  }
   function render() {
     if (typeof document === 'undefined') return;
     if (!hud) {
-      hud = document.createElement('div');
-      hud.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;' +
+      const panel = document.createElement('div');
+      panel.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;' +
         'font:13px/1.4 ui-monospace,monospace;color:#fff;background:#0009;padding:4px 8px;border-radius:6px;white-space:pre';
-      document.documentElement.append(hud);
+      hud = document.createElement('div');
+      const form = shotForm = document.createElement('form');
+      form.className = 'putt-notcheats-aim';
+      form.style.cssText = 'display:grid;align-items:center;pointer-events:auto;margin:0';
+      const inputStyle = 'width:6ch;padding:0;border:0;border-bottom:1px solid #fff8;border-radius:0;background:#fff2;color:inherit;font:inherit;text-align:right';
+      form.innerHTML = '<style>.putt-notcheats-aim input::selection { background:#ffe066; color:#111; text-shadow:none; }</style>' +
+        '<span>aim:</span><span style="display:flex;align-items:center;justify-content:space-between">' +
+        '<small>Enter/Space to shoot</small><span>' +
+        `<input aria-label="Angle (°)" name="angle" type="text" inputmode="decimal" value="000.00" required style="${inputStyle}">° · ` +
+        `<input aria-label="Power (%)" name="power" type="text" inputmode="decimal" value="050.00" required style="${inputStyle}">%</span></span>` +
+        '<output aria-live="polite" style="grid-column:2 / -1;white-space:normal"></output>';
+      const message = form.querySelector('output');
+      let shooting = false;
+      const numberOf = input => /^(?:\d+|\d*\.\d{1,2})$/.test(input.value) ? Number(input.value) : NaN;
+      const validInputs = () => {
+        for (const [input, min, max] of [[form.elements.angle, 0, 360], [form.elements.power, 0.1, 100]]) {
+          const value = numberOf(input);
+          input.setCustomValidity(value >= min && value <= max ? '' : `Enter ${min}–${max}, with up to two decimals.`);
+        }
+        return form.checkValidity();
+      };
+      let preview = null, previewRequest = 0;
+      const clearPreview = clearNumericPreview = () => {
+        previewRequest++;
+        if (preview) { preview.active = false; preview.power = 0; preview = null; }
+      };
+      const updatePreview = async () => {
+        const request = ++previewRequest;
+        if (!validInputs()) return clearPreview();
+        try {
+          const { runtime, game } = await numericState();
+          if (request !== previewRequest) return;
+          if (shooting || aim || game.state.phase !== 'aiming' || game.state.teleport) return clearPreview();
+          setNumericAim(runtime, numberOf(form.elements.angle), numberOf(form.elements.power) / 100);
+          preview = runtime.aim;
+        } catch {
+          if (request === previewRequest) clearPreview();
+        }
+      };
+      form.addEventListener('focusin', updatePreview);
+      form.addEventListener('input', updatePreview);
+      form.addEventListener('change', e => {
+        const value = numberOf(e.target);
+        if (Number.isFinite(value)) e.target.value = value.toFixed(2).padStart(6, '0');
+        return updatePreview();
+      });
+      addEventListener('pointerdown', e => {
+        if (e.target?.tagName !== 'CANVAS' && !form.contains(e.target)) clearPreview();
+      }, true);
+      addEventListener('focusin', e => {
+        if (e.target?.tagName !== 'CANVAS' && !form.contains(e.target)) clearPreview();
+      });
+      const adjustArrow = e => {
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.isComposing || e.defaultPrevented) return;
+        const horizontal = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+        if (!horizontal && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const focused = e.target === form.elements.angle || e.target === form.elements.power;
+        const input = focused ? e.target : horizontal ? form.elements.angle : form.elements.power;
+        const direction = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : -1;
+        if (focused && horizontal && Number.isFinite(numberOf(input))) {
+          const decimal = input.value.includes('.') ? input.value.indexOf('.') : input.value.length;
+          const cursor = input.selectionStart ?? 0;
+          input.value = numberOf(input).toFixed(2).padStart(6, '0');
+          const selected = Math.max(0, cursor + input.value.indexOf('.') - decimal);
+          input.setSelectionRange(selected, selected + 1);
+        }
+        const digits = [...input.value.matchAll(/\d/g)].map(match => match.index);
+        const cursor = input.selectionStart ?? 0;
+        if (focused && horizontal) {
+          const index = direction > 0
+            ? digits.find(index => index > cursor)
+            : digits.findLast(index => index < cursor);
+          if (index !== undefined) input.setSelectionRange(index, index + 1);
+          else {
+            const other = input === form.elements.angle ? form.elements.power : form.elements.angle;
+            const otherDigits = [...other.value.matchAll(/\d/g)].map(match => match.index);
+            const next = direction > 0 ? otherDigits[0] : otherDigits.at(-1);
+            other.focus();
+            other.setSelectionRange(next ?? 0, next === undefined ? 0 : next + 1);
+          }
+          return;
+        }
+        const current = numberOf(input);
+        if (!Number.isFinite(current)) return;
+        const decimal = input.value.includes('.') ? input.value.indexOf('.') : input.value.length;
+        const index = digits.find(index => index >= cursor) ?? digits.at(-1);
+        const place = focused ? decimal - index - (index < decimal ? 1 : 0) : 0;
+        const value = current + direction * 10 ** place;
+        const isAngle = input === form.elements.angle;
+        input.value = Math.max(0, Math.min(isAngle ? 360 : 100, value)).toFixed(2).padStart(6, '0');
+        if (focused) {
+          const selected = Math.max(0, input.value.indexOf('.') - place - (place >= 0 ? 1 : 0));
+          input.setSelectionRange(selected, selected + 1);
+        }
+        return updatePreview();
+      };
+      addEventListener('keydown', e => {
+        if (form.contains(e.target) || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable) return;
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.isComposing || e.defaultPrevented) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.target?.closest?.('button, a[href], [role="button"]')) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (!e.repeat) form.requestSubmit();
+          return;
+        }
+        if ([KEY, 'r'].includes(e.key.toLowerCase())) clearPreview();
+        return adjustArrow(e);
+      });
+      form.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && e.repeat) e.preventDefault();
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.isComposing) return;
+        const key = e.key.toLowerCase();
+        if (['enter', ' ', KEY, 'r', 't', 'e', 'w'].includes(key)) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!e.repeat) {
+            if (key === 'enter' || key === ' ') form.requestSubmit();
+            // Forward shortcuts outside the fields without moving keyboard focus.
+            else {
+              if (key === KEY || key === 'r') clearPreview();
+              window.dispatchEvent(new KeyboardEvent('keydown', { key, code: e.code }));
+            }
+          }
+          return;
+        }
+        return adjustArrow(e);
+      });
+      form.addEventListener('submit', async e => {
+        e.preventDefault();
+        clearPreview();
+        if (!validInputs()) { form.reportValidity(); return; }
+        const angle = numberOf(form.elements.angle), power = numberOf(form.elements.power);
+        if (shooting) return;
+        shooting = true;
+        message.textContent = '';
+        try {
+          await shootNumeric(angle, power / 100);
+        } catch (error) {
+          message.textContent = error.message;
+        } finally {
+          shooting = false;
+        }
+      });
+      hudDetails = document.createElement('div');
+      panel.append(hud, form, hudDetails);
+      document.documentElement.append(panel);
     }
     strokes = game?.state.strokes;
     const label = shotLabel && Number.isInteger(strokes) && strokes >= 0
       ? shotLabel.replace(':', ` ${strokes}:`) : shotLabel;
-    const rows = [[label, status || '—'], ['aim:', aiming || '—'],
+    const rows = [[label, status || '—'],
       ['pos:', where], ['camera:', view]].filter(([, value]) => value);
     // Reserve room for three-digit shot counts and a full camera readout.
     const labelWidth = Math.max(9, ...rows.map(([label]) => label.length));
     const valueWidth = Math.max(34, ...rows.map(([, value]) => value.length));
-    hud.textContent = rows.map(([label, value]) =>
-      label.padEnd(labelWidth + 1) + value.padStart(valueWidth)).join('\n');
+    const lines = rows.map(([label, value]) =>
+      label.padEnd(labelWidth + 1) + value.padStart(valueWidth));
+    hud.textContent = lines[0];
+    hudDetails.textContent = lines.slice(1).join('\n');
+    shotForm.style.gridTemplateColumns = `${labelWidth + 1}ch ${valueWidth}ch`;
   }
 
   async function tick() {
@@ -91,7 +248,9 @@
     ex.rawrigidbodyset_rbApplyImpulse = (set, h, imp, wake) => {
       const speed = Math.hypot(...take(raw.rawrigidbodyset_rbLinvel(set, h)));
       const dv = Math.hypot(...read(imp)) / (raw.rawrigidbodyset_rbMass(set, h) || 1);
-      if (speed < 0.2 && dv > 0.15) {
+      const numeric = numericShot?.set === set && numericShot.h === h;
+      if (numeric || (speed < 0.2 && dv > 0.15)) {
+        if (numeric) numericShot = null;
         if (stack.length && stack[0].set !== set) stack.length = 0; 
         const [ix, , iz] = read(imp);
         const shot = {
@@ -101,6 +260,9 @@
         };
         stack.push(shot);
         show('shot:', shot);
+        if (!numeric && shotForm && ball?.set === set && ball.h === h) {
+          fillAim(shot);
+        }
       }
       return exports.rawrigidbodyset_rbApplyImpulse(set, h, imp, wake);
     };
@@ -154,7 +316,6 @@
     return undo().catch(error => {
       shotLabel = '';
       status = `undo failed: ${error.message}`;
-      aiming = '';
       render();
     });
   });
@@ -172,6 +333,53 @@
     }
   };
 
+  async function numericState() {
+    const url = performance.getEntriesByType('resource').map(entry => entry.name)
+      .find(name => name.startsWith(location.origin + '/assets/runtime-') && name.endsWith('.js'));
+    if (!url) throw new Error('Open a hole before shooting.');
+    // Reuse the loaded module; discover state by shape rather than minified export names.
+    const values = Object.values(await import(url));
+    const runtime = values.find(value => value?.ballPos && value?.aim?.pull);
+    const game = values.find(value => Array.isArray(value?.state?.shots) && 'pendingShot' in value.state);
+    if (!runtime || !game) throw new Error('Numeric shots are unavailable with this game version.');
+    return { runtime, game };
+  }
+
+  function setNumericAim(runtime, angle, power) {
+    const radians = angle * Math.PI / 180;
+    runtime.aim.pull.set(-Math.cos(radians), 0, Math.sin(radians));
+    runtime.aim.power = power;
+    runtime.aim.active = true;
+  }
+
+  async function shootNumeric(angle, power) {
+    const { runtime, game } = await numericState();
+    const canvas = document.querySelector('canvas'), st = stateFor(canvas);
+    if (!st || !ball || !raw || aim || game.state.phase !== 'aiming' || game.state.teleport) {
+      throw new Error('Wait until the ball is ready to shoot.');
+    }
+    const p = runtime.ballPos.clone().project(st.camera), r = canvas.getBoundingClientRect();
+    const event = {
+      bubbles: true, pointerId: -1337, pointerType: 'mouse', isPrimary: true, button: 0,
+      clientX: r.left + (p.x + 1) * r.width / 2, clientY: r.top + (1 - p.y) * r.height / 2,
+    };
+    numericPointer = event.pointerId;
+    try {
+      canvas.dispatchEvent(new PointerEvent('pointerdown', { ...event, buttons: 1 }));
+      if (game.state.phase !== 'charging') throw new Error('The game is not ready to shoot.');
+      setNumericAim(runtime, angle, power);
+      numericShot = { ...ball };
+      canvas.dispatchEvent(new PointerEvent('pointerup', { ...event, buttons: 0 }));
+      if (!game.state.pendingShot) {
+        numericShot = null;
+        throw new Error('The game did not accept the shot.');
+      }
+    } finally {
+      canvas.dispatchEvent(new PointerEvent('pointercancel', event));
+      numericPointer = null;
+    }
+  }
+
   function hit(st, cx, cy, y) {
     const cam = st.camera, r = st.gl.domElement.getBoundingClientRect(), V = cam.position.constructor;
     const o = new V().setFromMatrixPosition(cam.matrixWorld);
@@ -184,9 +392,18 @@
   let down = null, aim = null;
   addEventListener('pointerdown', e => { down = e; }, true);
   const capture = Element.prototype.setPointerCapture;
+  // Synthetic pointer events have no browser pointer to capture or release.
+  const release = Element.prototype.releasePointerCapture;
+  Element.prototype.releasePointerCapture = function (id) {
+    if (id === numericPointer) return;
+    return release.call(this, id);
+  };
   Element.prototype.setPointerCapture = function (id) {
+    if (id === numericPointer) return;
     const st = this.tagName === 'CANVAS' && down?.pointerId === id && ball && raw && stateFor(this);
     if (st) {
+      // The game captures pointers for ball grabs, not camera drags.
+      clearNumericPreview?.();
       const y = take(raw.rawrigidbodyset_rbTranslation(ball.set, ball.h))[1];
       const start = hit(st, down.clientX, down.clientY, y);
       if (start) aim = { id, st, y, start, x0: down.clientX, y0: down.clientY };
@@ -200,20 +417,15 @@
     const px = now[0] - aim.start[0], pz = now[1] - aim.start[1], pull = Math.hypot(px, pz);
     const r = aim.st.gl.domElement.getBoundingClientRect();
     const drag = Math.hypot(e.clientX - aim.x0, e.clientY - aim.y0);
-    if ((pull < MIN_PULL && drag < 24) || pull < 0.02) {
-      aiming = '—'.padStart(7);
-    } else {
-      const power = Math.max(Math.min(pull, MAX_PULL) / MAX_PULL,
-        Math.min(drag / (0.33 * Math.min(r.width, r.height)), 1)) ** 1.6;
-      aiming = fmt({ angle: angleOf(-px, -pz), power });
-    }
     render();
+    if ((pull < MIN_PULL && drag < 24) || pull < 0.02) return;
+    const power = Math.max(Math.min(pull, MAX_PULL) / MAX_PULL,
+      Math.min(drag / (0.33 * Math.min(r.width, r.height)), 1)) ** 1.6;
+    fillAim({ angle: angleOf(-px, -pz), power });
   }, true);
   const end = e => {
     if (e.pointerId !== aim?.id) return;
     aim = null;
-    aiming = '';
-    render();
   };
   addEventListener('pointerup', end, true);
   addEventListener('pointercancel', end, true);

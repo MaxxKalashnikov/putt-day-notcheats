@@ -11,7 +11,12 @@ async function load() {
   const physics = { position: [0, 0, 0] };
   game.state = { lastLie: [0, -0.06, 0], teleport: null, phase: 'aiming', strokes: 0 };
   const listeners = new Map();
-  const hud = { style: {} };
+  const hud = { style: {}, append() {} };
+  let divCount = 0;
+  const form = {
+    style: {}, elements: { angle: { setCustomValidity() {} }, power: { setCustomValidity() {} } },
+    querySelector: () => ({}), addEventListener() {}, contains: () => false,
+  };
   const memory = { buffer: new ArrayBuffer(4096) };
   let next = 0;
   const vector = (x, y, z) => {
@@ -42,7 +47,7 @@ async function load() {
     location: { origin },
     performance: { getEntriesByType: () => [{ name: `${origin}/assets/runtime-test.js` }] },
     WebAssembly: { Instance, instantiate: async () => new Instance() },
-    document: { createElement: () => hud, documentElement: { append() {} } },
+    document: { createElement: tag => tag === 'form' ? form : ++divCount === 3 ? { style: {} } : hud, documentElement: { append() {} } },
     addEventListener(type, listener) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(listener);
