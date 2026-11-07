@@ -1,6 +1,6 @@
 # NOT cheats for putt.day
 
-Shot angle, power, ball position, camera heading, tilt and zoom distance for [putt.day](https://putt.day/), with `Z` to return to the previous shot's position.
+Shot angle, power, ball position, camera heading, tilt and zoom distance for [putt.day](https://putt.day/), with `Z` to return to the previous shot's position and an optional per-object colored edge overlay.
 Available as an installable userscript or an unpacked Chrome extension.
 
 [**Install userscript**](https://raw.githubusercontent.com/MaxxKalashnikov/putt-day-notcheats/master/putt-day-notcheats.user.js)
@@ -12,6 +12,25 @@ Undo restores both the ball position and the game's out-of-bounds return point; 
 Camera heading uses the same angle convention as shots; tilt is positive when looking down.
 Zoom distance is the camera-to-ball distance in game units, not a magnification factor.
 It appears once the ball is detected and changes as you scroll or pinch to zoom.
+
+## Edge overlay
+
+| Shortcut | Action |
+| --- | --- |
+| `E` | Toggle edges, off by default |
+| `W` | Switch between creases and full triangle wireframe |
+| `X` | Toggle x-ray to show edges through objects |
+
+These shortcuts use the letters on your keyboard layout, not physical QWERTY key positions.
+Shortcuts are ignored while typing in editable fields or holding Shift/Command/Control/Option.
+Holding a shortcut does not repeatedly toggle it.
+The default crease mode shows open boundaries and edges where faces meet at an angle of at least 15 degrees.
+Mode and x-ray choices apply when you next enable edges, and reset on page reload.
+For a different crease threshold, run `window.__edges.setAngle(30)` in the browser console.
+Disable any standalone copy of the edge userscript before using this version.
+
+The edge overlay is adapted from **Thea**'s `three.js polygon/object edges` v1.1, shared in these Discord posts:
+[original post](https://discord.com/channels/1516982740975882350/1516982741466353817/1552671332486094909) and [related post](https://discord.com/channels/1516982740975882350/1516982741466353817/1552670961290182757).
 
 ## Browser setup
 
