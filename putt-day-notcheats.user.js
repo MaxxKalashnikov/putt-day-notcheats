@@ -27,7 +27,7 @@
   const take = p => { const v = read(p); raw.__wbg_rawvector_free(p, 0); return v; };
 
   const angleOf = (x, z) => (Math.atan2(-z, x) * 180 / Math.PI + 360) % 360;
-  const fmt = s => `${s.angle.toFixed(1).padStart(5)}° · ${(s.power * 100).toFixed(0).padStart(3)}%`;
+  const fmt = s => `${s.angle.toFixed(2).padStart(6)}° · ${(s.power * 100).toFixed(2).padStart(6)}%`;
   let shotLabel = '', status = '', aiming = '', where = '', view = '';
   function show(label, shot) { shotLabel = label; status = fmt(shot); aiming = ''; render(); }
   function render() {
@@ -182,7 +182,7 @@
     const r = aim.st.gl.domElement.getBoundingClientRect();
     const drag = Math.hypot(e.clientX - aim.x0, e.clientY - aim.y0);
     if ((pull < MIN_PULL && drag < 24) || pull < 0.02) {
-      aiming = '—'.padStart(6);
+      aiming = '—'.padStart(7);
     } else {
       const power = Math.max(Math.min(pull, MAX_PULL) / MAX_PULL,
         Math.min(drag / (0.33 * Math.min(r.width, r.height)), 1)) ** 1.6;

@@ -79,20 +79,20 @@ test('last shot stays visible while aiming, cancelling and retrying after undo',
 
   start();
   move(50);
-  assert.equal(hud.textContent, 'aim:      —');
+  assert.equal(hud.textContent, 'aim:       —');
   end('pointercancel');
   assert.equal(hud.textContent, '');
 
   shoot(5, 0);
-  const first = 'shot 1:   0.0° ·  50%';
+  const first = 'shot 1:   0.00° ·  50.00%';
   assert.equal(hud.textContent, first);
   start();
   move(50);
-  assert.equal(hud.textContent, `${first}\naim:         —`);
+  assert.equal(hud.textContent, `${first}\naim:          —`);
   move(100);
-  assert.equal(hud.textContent, `${first}\naim:    180.0° · 100%`);
+  assert.equal(hud.textContent, `${first}\naim:    180.00° · 100.00%`);
   emit('pointerup', { pointerId: 2 });
-  assert.equal(hud.textContent, `${first}\naim:    180.0° · 100%`);
+  assert.equal(hud.textContent, `${first}\naim:    180.00° · 100.00%`);
   end('pointercancel');
   assert.equal(hud.textContent, first);
 
@@ -101,16 +101,16 @@ test('last shot stays visible while aiming, cancelling and retrying after undo',
   end('pointerup');
   assert.equal(hud.textContent, first);
   shoot(0, -8);
-  assert.equal(hud.textContent, 'shot 2:  90.0° ·  80%');
+  assert.equal(hud.textContent, 'shot 2:  90.00° ·  80.00%');
   await emit('keydown', { key: 'z', target: canvas });
-  const undone = 'back to shot 2 spot — you hit  90.0° ·  80%';
+  const undone = 'back to shot 2 spot — you hit  90.00° ·  80.00%';
   assert.equal(hud.textContent, undone);
   start();
   move(100);
-  assert.equal(hud.textContent, `${undone}\n${'aim: '.padEnd('back to shot 2 spot — you hit '.length)}180.0° · 100%`);
+  assert.equal(hud.textContent, `${undone}\n${'aim: '.padEnd('back to shot 2 spot — you hit '.length)}180.00° · 100.00%`);
   end('pointerup');
   shoot(5, 0);
-  assert.equal(hud.textContent, 'shot 2:   0.0° ·  50%');
+  assert.equal(hud.textContent, 'shot 2:   0.00° ·  50.00%');
 
   const aligned = () => {
     const [previous, current] = hud.textContent.split('\n');
@@ -129,4 +129,7 @@ test('last shot stays visible while aiming, cancelling and retrying after undo',
   move(100);
   aligned();
   end('pointerup');
+  const radians = 12.346 * Math.PI / 180;
+  shoot(Math.cos(radians) * 3.4567, -Math.sin(radians) * 3.4567);
+  assert.equal(hud.textContent, 'shot 11:  12.35° ·  34.57%');
 });
