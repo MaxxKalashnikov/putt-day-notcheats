@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NOT cheats for putt.day
 // @namespace    https://github.com/MaxxKalashnikov/putt-day-notcheats
-// @version      1337.2.1
+// @version      1337.3.0
 // @description  Adds shot, position, camera angle and zoom-distance indicators. Press Z to undo.
 // @author       MaxxKalashnikov
 // @homepageURL  https://github.com/MaxxKalashnikov/putt-day-notcheats
@@ -27,9 +27,9 @@
   const take = p => { const v = read(p); raw.__wbg_rawvector_free(p, 0); return v; };
 
   const angleOf = (x, z) => (Math.atan2(-z, x) * 180 / Math.PI + 360) % 360;
-  const fmt = s => `${s.angle.toFixed(1)}° · ${(s.power * 100).toFixed(0)}%`;
-  let status = '', where = '', view = '';
-  function show(text) { status = text; render(); }
+  const fmt = s => `${s.angle.toFixed(1).padStart(5)}° · ${(s.power * 100).toFixed(0).padStart(3)}%`;
+  let shotLabel = '', status = '', aiming = '', where = '', view = '';
+  function show(label, shot) { shotLabel = label; status = fmt(shot); aiming = ''; render(); }
   function render() {
     if (typeof document === 'undefined') return;
     if (!hud) {
@@ -38,7 +38,8 @@
         'font:13px/1.4 ui-monospace,monospace;color:#fff;background:#0009;padding:4px 8px;border-radius:6px;white-space:pre';
       document.documentElement.append(hud);
     }
-    hud.textContent = [status, where, view].filter(Boolean).join('\n');
+    hud.textContent = [status && shotLabel + status,
+      aiming && 'aim: '.padEnd(shotLabel.length) + aiming, where, view].filter(Boolean).join('\n');
   }
 
   function tick() {
@@ -85,7 +86,7 @@
           power: dv / MAX_SHOT_SPEED,
         };
         stack.push(shot);
-        show(`shot ${stack.length}: ${fmt(shot)}`);
+        show(`shot ${stack.length}: `, shot);
       }
       return exports.rawrigidbodyset_rbApplyImpulse(set, h, imp, wake);
     };
@@ -125,14 +126,17 @@
     raw.rawrigidbodyset_rbSetAngvel(s.set, s.h, zero, true);
     raw.__wbg_rawvector_free(zero, 0);
     stack.pop();
-    show(`back to shot ${stack.length + 1} spot — you hit ${fmt(s)}`);
+    show(`back to shot ${stack.length + 1} spot — you hit `, s);
   }
 
   addEventListener('keydown', e => {
     if (e.key.toLowerCase() !== KEY || e.ctrlKey || e.metaKey || e.altKey) return;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable) return;
     return undo().catch(error => {
-      show(`undo failed: ${error.message}`);
+      shotLabel = '';
+      status = `undo failed: ${error.message}`;
+      aiming = '';
+      render();
     });
   });
 
@@ -177,12 +181,21 @@
     const px = now[0] - aim.start[0], pz = now[1] - aim.start[1], pull = Math.hypot(px, pz);
     const r = aim.st.gl.domElement.getBoundingClientRect();
     const drag = Math.hypot(e.clientX - aim.x0, e.clientY - aim.y0);
-    if ((pull < MIN_PULL && drag < 24) || pull < 0.02) return show('aim: —');
-    const power = Math.max(Math.min(pull, MAX_PULL) / MAX_PULL,
-      Math.min(drag / (0.33 * Math.min(r.width, r.height)), 1)) ** 1.6;
-    show(`aim: ${fmt({ angle: angleOf(-px, -pz), power })}`); 
+    if ((pull < MIN_PULL && drag < 24) || pull < 0.02) {
+      aiming = '—'.padStart(6);
+    } else {
+      const power = Math.max(Math.min(pull, MAX_PULL) / MAX_PULL,
+        Math.min(drag / (0.33 * Math.min(r.width, r.height)), 1)) ** 1.6;
+      aiming = fmt({ angle: angleOf(-px, -pz), power });
+    }
+    render();
   }, true);
-  const end = e => { if (e.pointerId === aim?.id) aim = null; };
+  const end = e => {
+    if (e.pointerId !== aim?.id) return;
+    aim = null;
+    aiming = '';
+    render();
+  };
   addEventListener('pointerup', end, true);
   addEventListener('pointercancel', end, true);
 })();

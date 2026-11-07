@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NOT cheats for putt.day",
-  "version": "1337.2.1",
+  "version": "1337.3.0",
   "description": "Adds shot, position, camera angle and zoom-distance indicators. Press Z to undo.",
   "icons": {
     "128": "icon.png"
