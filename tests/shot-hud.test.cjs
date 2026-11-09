@@ -8,7 +8,7 @@ const { game } = require('./fixtures/assets/runtime-test.js');
 const source = readFileSync(`${__dirname}/../putt-day-notcheats.user.js`, 'utf8');
 
 test('shot and aim rows stay visible while aiming, cancelling and retrying after undo', async () => {
-  game.state = { lastLie: [0, -0.06, 0] };
+  game.state = { lastLie: [0, -0.06, 0], strokes: 0 };
   const listeners = new Map();
   const hud = { style: {} };
   const assertHud = expected => {
@@ -59,6 +59,7 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
   vm.runInNewContext(source, context, { importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER });
   const emit = (type, event) => Promise.all(listeners.get(type).map(listener => listener(event)));
   const raw = (await context.WebAssembly.instantiate()).exports;
+  await frame();
   raw.rawrigidbodyset_rbSetLinvel(1, 1, vector(0, 0, 0), true);
 
   class Vector {
@@ -85,15 +86,18 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
   };
   const move = x => emit('pointermove', { pointerId: 1, clientX: x, clientY: 50 });
   const end = type => emit(type, { pointerId: 1 });
-  const shoot = (x, z) => raw.rawrigidbodyset_rbApplyImpulse(1, 1, vector(x, 0, z), true);
+  const shoot = (x, z) => {
+    game.state.strokes++;
+    raw.rawrigidbodyset_rbApplyImpulse(1, 1, vector(x, 0, z), true);
+  };
 
   start();
   move(50);
-  assertHud('shot:         —\naim:          —');
+  assertHud('shot 0:       —\naim:          —');
   move(100);
-  assertHud('shot:         —\naim:    180.00° · 100.00%');
+  assertHud('shot 0:       —\naim:    180.00° · 100.00%');
   end('pointercancel');
-  assertHud('shot:         —\naim:          —');
+  assertHud('shot 0:       —\naim:          —');
 
   shoot(5, 0);
   const first = 'shot 1:   0.00° ·  50.00%';
@@ -123,7 +127,7 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
   assertHud(`${undone}\naim: 180.00° · 100.00%`);
   end('pointerup');
   shoot(5, 0);
-  assertHud('shot 2:   0.00° ·  50.00%' + idle);
+  assertHud('shot 3:   0.00° ·  50.00%' + idle);
 
   const aligned = () => {
     const [previous, current] = hud.textContent.split('\n');
@@ -132,7 +136,7 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
       assert.equal(current.indexOf(unit), previous.indexOf(unit));
     }
   };
-  for (let i = 0; i < 8; i++) shoot(5, 0);
+  for (let i = 0; i < 7; i++) shoot(5, 0);
   start();
   move(60);
   assert.ok(hud.textContent.startsWith('shot 10:'));
@@ -173,5 +177,5 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
   await emit('keydown', { key: 'z', target: canvas });
   assertHud(`undo 100: 0.00° · 50.00%\n${details}`);
   shoot(5, 0);
-  assertHud(`shot 100: 0.00° · 50.00%\n${details}`);
+  assertHud(`shot 101: 0.00° · 50.00%\n${details}`);
 });

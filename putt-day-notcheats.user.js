@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NOT cheats for putt.day
 // @namespace    https://github.com/MaxxKalashnikov/putt-day-notcheats
-// @version      1337.6.0
+// @version      1337.6.1
 // @description  Shot, position and camera indicators, plus mesh edges. Z: undo. E/W/X: edges/mode/x-ray.
 // @author       MaxxKalashnikov
 // @homepageURL  https://github.com/MaxxKalashnikov/putt-day-notcheats
@@ -22,6 +22,7 @@
   const stack = []; 
   let raw = null, hud = null;
   let ball = null;
+  let game = null, strokes;
 
   const read = p => Array.from(new Float32Array(raw.memory.buffer, p + 4, 3));
   const take = p => { const v = read(p); raw.__wbg_rawvector_free(p, 0); return v; };
@@ -38,7 +39,10 @@
         'font:13px/1.4 ui-monospace,monospace;color:#fff;background:#0009;padding:4px 8px;border-radius:6px;white-space:pre';
       document.documentElement.append(hud);
     }
-    const rows = [[shotLabel.trimEnd(), status || '—'], ['aim:', aiming || '—'],
+    strokes = game?.state.strokes;
+    const label = shotLabel && Number.isInteger(strokes) && strokes >= 0
+      ? shotLabel.replace(':', ` ${strokes}:`) : shotLabel;
+    const rows = [[label, status || '—'], ['aim:', aiming || '—'],
       ['pos:', where], ['camera:', view]].filter(([, value]) => value);
     // Reserve room for three-digit shot counts and a full camera readout.
     const labelWidth = Math.max(9, ...rows.map(([label]) => label.length));
@@ -47,7 +51,11 @@
       label.padEnd(labelWidth + 1) + value.padStart(valueWidth)).join('\n');
   }
 
-  function tick() {
+  async function tick() {
+    try {
+      game ??= await gameStore();
+      if (game.state.strokes !== strokes) render();
+    } catch {}
     let position = null;
     try {
       if (ball && raw) {
@@ -92,7 +100,7 @@
           power: dv / MAX_SHOT_SPEED,
         };
         stack.push(shot);
-        show(`shot ${stack.length}: `, shot);
+        show('shot:', shot);
       }
       return exports.rawrigidbodyset_rbApplyImpulse(set, h, imp, wake);
     };
@@ -113,15 +121,20 @@
   WebAssembly.instantiate = (...a) => inst(...a).then(wrap);
   if (stream) WebAssembly.instantiateStreaming = (...a) => stream(...a).then(wrap);
 
-  async function undo() {
-    const s = stack.at(-1);
-    if (!s || !raw) return;
+  async function gameStore() {
     const url = performance.getEntriesByType('resource').map(entry => entry.name)
       .find(name => name.startsWith(location.origin + '/assets/runtime-') && name.endsWith('.js'));
     if (!url) throw new Error('game runtime not found');
     const game = Object.values(await import(url)).find(value =>
       Array.isArray(value?.state?.lastLie) && typeof value.setState === 'function');
     if (!game) throw new Error('game return point unavailable');
+    return game;
+  }
+
+  async function undo() {
+    const s = stack.at(-1);
+    if (!s || !raw) return;
+    game = await gameStore();
     if (stack.at(-1) !== s) return;
     const [x, y, z] = s.pos;
     // OOB uses lastLie, whose height excludes the ball radius, not the rigid body's centre.
@@ -132,7 +145,7 @@
     raw.rawrigidbodyset_rbSetAngvel(s.set, s.h, zero, true);
     raw.__wbg_rawvector_free(zero, 0);
     stack.pop();
-    show(`undo ${stack.length + 1}: `, s);
+    show('undo:', s);
   }
 
   addEventListener('keydown', e => {

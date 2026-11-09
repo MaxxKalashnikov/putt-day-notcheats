@@ -9,7 +9,7 @@ const source = readFileSync(`${__dirname}/../putt-day-notcheats.user.js`, 'utf8'
 
 async function load() {
   const physics = { position: [0, 0, 0] };
-  game.state = { lastLie: [0, -0.06, 0], teleport: null, phase: 'aiming' };
+  game.state = { lastLie: [0, -0.06, 0], teleport: null, phase: 'aiming', strokes: 0 };
   const listeners = new Map();
   const hud = { style: {} };
   const memory = { buffer: new ArrayBuffer(4096) };
@@ -35,7 +35,9 @@ async function load() {
   class Instance { constructor() { this.exports = exports; } }
   class Element { setPointerCapture() {} }
   const origin = pathToFileURL(`${__dirname}/fixtures`).href;
+  let frame;
   const context = {
+    requestAnimationFrame(callback) { frame = callback; },
     EventTarget, Element,
     location: { origin },
     performance: { getEntriesByType: () => [{ name: `${origin}/assets/runtime-test.js` }] },
@@ -53,9 +55,37 @@ async function load() {
   raw.rawrigidbodyset_rbSetLinvel(1, 1, vector(0, 0, 0), true);
 
   const canvas = { tagName: 'CANVAS' };
-  const shoot = (x, z) => raw.rawrigidbodyset_rbApplyImpulse(1, 1, vector(x, 0, z), true);
-  return { hud, emit, canvas, shoot, physics, context };
+  const shoot = (x, z) => {
+    game.state.strokes++;
+    raw.rawrigidbodyset_rbApplyImpulse(1, 1, vector(x, 0, z), true);
+  };
+  await frame();
+  return { hud, emit, canvas, shoot, physics, context, frame: () => frame() };
 }
+
+test('HUD count follows game strokes through repeated undo, retry, water and restart', async () => {
+  const { hud, shoot, emit, canvas, frame } = await load();
+  assert.match(hud.textContent, /^shot 0:/);
+  shoot(5, 0);
+  shoot(0, -5);
+  for (let i = 0; i < 2; i++) {
+    await emit('keydown', { key: 'z', target: canvas });
+    assert.match(hud.textContent, /^undo 2:/);
+    assert.equal(game.state.strokes, 2, 'undo does not rewind scoring');
+  }
+  shoot(5, 0);
+  assert.match(hud.textContent, /^shot 3:/);
+  game.setState(state => ({ ...state, strokes: 0 }));
+  await frame();
+  assert.match(hud.textContent, /^shot 0:/);
+  shoot(5, 0);
+  assert.match(hud.textContent, /^shot 1:/);
+  game.setState(state => ({ ...state, strokes: 0, phase: 'resetting' }));
+  await frame();
+  assert.match(hud.textContent, /^shot 0:/, 'first-shot water forgiveness resets the counter');
+  shoot(0, -5);
+  assert.match(hud.textContent, /^shot 1:/);
+});
 
 test('OOB after undo returns to the restored shot origin, not the previous landing', async () => {
   const { physics, shoot, emit, canvas } = await load();

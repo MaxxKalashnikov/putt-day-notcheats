@@ -6,6 +6,7 @@ Available as an installable userscript or an unpacked Chrome extension.
 [**Install userscript**](https://raw.githubusercontent.com/MaxxKalashnikov/putt-day-notcheats/master/putt-day-notcheats.user.js)
 
 The last shot's angle and power stay visible on a separate line while aiming the next shot, including after undo.
+The top-row number follows the game's stroke counter, including after undo and restart.
 Shot angle and power are displayed to two decimal places.
 `Z` undo requires a physical keyboard and is not accessible via touch screen.
 Undo restores both the ball position and the game's out-of-bounds return point; it does not rewind the stroke count.
