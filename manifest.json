@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NOT cheats for putt.day",
-  "version": "1337.4.1",
+  "version": "1337.5.0",
   "description": "Shot, position and camera indicators, plus mesh edges. Z: undo. E/W/X: edges/mode/x-ray.",
   "icons": {
     "128": "icon.png"

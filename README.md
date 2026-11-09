@@ -1,6 +1,6 @@
 # NOT cheats for putt.day
 
-Shot angle, power, ball position, camera heading, tilt and zoom distance for [putt.day](https://putt.day/), with `Z` to return to the previous shot's position and an optional per-object colored edge overlay.
+Shot angle, power, ball position, camera heading, tilt and relative zoom for [putt.day](https://putt.day/), with `Z` to return to the previous shot's position and an optional per-object colored edge overlay.
 Available as an installable userscript or an unpacked Chrome extension.
 
 [**Install userscript**](https://raw.githubusercontent.com/MaxxKalashnikov/putt-day-notcheats/master/putt-day-notcheats.user.js)
@@ -10,7 +10,7 @@ Shot angle and power are displayed to two decimal places.
 `Z` undo requires a physical keyboard and is not accessible via touch screen.
 Undo restores both the ball position and the game's out-of-bounds return point; it does not rewind the stroke count.
 Camera heading uses the same angle convention as shots; tilt is positive when looking down.
-Zoom distance is the camera-to-ball distance in game units, not a magnification factor.
+Relative zoom is `4.4 / camera-to-ball distance`: `1.00×` at the default distance of 4.4 game units, `2.20×` at distance 2, and `0.37×` at distance 12.
 It appears once the ball is detected and changes as you scroll or pinch to zoom.
 
 ## Edge overlay
@@ -76,7 +76,7 @@ If the install prompt does not appear, save `putt-day-notcheats.user.js` in the 
 
 Make sure both the userscript manager and the script are enabled, then fully reload [putt.day](https://putt.day/).
 Open a hole and check for position, angle and power text, then try `Z` after taking a shot.
-Rotate and zoom the camera to check that heading, tilt and zoom distance update.
+Rotate and zoom the camera to check that heading, tilt and relative zoom update.
 
 ## Turn it on or off
 

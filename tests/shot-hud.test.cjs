@@ -34,7 +34,9 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
   class Instance { constructor() { this.exports = exports; } }
   class Element { setPointerCapture() {} }
   const origin = pathToFileURL(`${__dirname}/fixtures`).href;
+  let frame;
   const context = {
+    requestAnimationFrame(callback) { frame = callback; },
     EventTarget, Element,
     location: { origin },
     performance: { getEntriesByType: () => [{ name: `${origin}/assets/runtime-test.js` }] },
@@ -135,4 +137,12 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
   const radians = 12.346 * Math.PI / 180;
   shoot(Math.cos(radians) * 3.4567, -Math.sin(radians) * 3.4567);
   assert.equal(hud.textContent, 'shot 11:  12.35° ·  34.57%\naim:           —');
+
+  context.document.querySelector = () => canvas;
+  state.camera.getWorldDirection = () => ({ x: 0, y: -1, z: -1 });
+  for (const [distance, zoom] of [[4.4, '1.00×'], [2, '2.20×'], [12, '0.37×'], [0, '—']]) {
+    state.camera.getWorldPosition = () => ({ x: 0, y: distance, z: 0 });
+    frame();
+    assert.equal(hud.textContent.split('\n').at(-1), `camera: 90.0° · tilt 45.0° · zoom: ${zoom}`);
+  }
 });

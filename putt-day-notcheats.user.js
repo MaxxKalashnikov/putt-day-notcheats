@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NOT cheats for putt.day
 // @namespace    https://github.com/MaxxKalashnikov/putt-day-notcheats
-// @version      1337.4.1
+// @version      1337.5.0
 // @description  Shot, position and camera indicators, plus mesh edges. Z: undo. E/W/X: edges/mode/x-ray.
 // @author       MaxxKalashnikov
 // @homepageURL  https://github.com/MaxxKalashnikov/putt-day-notcheats
@@ -62,8 +62,9 @@
         const tilt = Math.atan2(-d.y, horizontal) * 180 / Math.PI;
         // The game zooms by moving the camera, not by changing camera.zoom.
         const p = cam.getWorldPosition(new V());
-        const distance = position ? Math.hypot(p.x - position[0], p.y - position[1], p.z - position[2]).toFixed(2) : '—';
-        line = `camera: ${heading} · tilt ${tilt.toFixed(1)}°\nzoom distance: ${distance}`;
+        const distance = position ? Math.hypot(p.x - position[0], p.y - position[1], p.z - position[2]) : 0;
+        const zoom = distance > 0 ? `${(4.4 / distance).toFixed(2)}×` : '—';
+        line = `camera: ${heading} · tilt ${tilt.toFixed(1)}° · zoom: ${zoom}`;
       }
     } catch {}
     if (line !== view) { view = line; render(); }
