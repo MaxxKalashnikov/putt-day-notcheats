@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NOT cheats for putt.day
 // @namespace    https://github.com/MaxxKalashnikov/putt-day-notcheats
-// @version      1337.4.0
+// @version      1337.4.1
 // @description  Shot, position and camera indicators, plus mesh edges. Z: undo. E/W/X: edges/mode/x-ray.
 // @author       MaxxKalashnikov
 // @homepageURL  https://github.com/MaxxKalashnikov/putt-day-notcheats
@@ -28,7 +28,7 @@
 
   const angleOf = (x, z) => (Math.atan2(-z, x) * 180 / Math.PI + 360) % 360;
   const fmt = s => `${s.angle.toFixed(2).padStart(6)}° · ${(s.power * 100).toFixed(2).padStart(6)}%`;
-  let shotLabel = '', status = '', aiming = '', where = '', view = '';
+  let shotLabel = 'shot:   ', status = '', aiming = '', where = '', view = '';
   function show(label, shot) { shotLabel = label; status = fmt(shot); aiming = ''; render(); }
   function render() {
     if (typeof document === 'undefined') return;
@@ -38,8 +38,8 @@
         'font:13px/1.4 ui-monospace,monospace;color:#fff;background:#0009;padding:4px 8px;border-radius:6px;white-space:pre';
       document.documentElement.append(hud);
     }
-    hud.textContent = [status && shotLabel + status,
-      aiming && 'aim: '.padEnd(shotLabel.length) + aiming, where, view].filter(Boolean).join('\n');
+    hud.textContent = [shotLabel + (status || '—'.padStart(7)),
+      'aim: '.padEnd(shotLabel.length) + (aiming || '—'.padStart(7)), where, view].filter(Boolean).join('\n');
   }
 
   function tick() {

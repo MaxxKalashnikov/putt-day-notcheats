@@ -7,7 +7,7 @@ const { game } = require('./fixtures/assets/runtime-test.js');
 
 const source = readFileSync(`${__dirname}/../putt-day-notcheats.user.js`, 'utf8');
 
-test('last shot stays visible while aiming, cancelling and retrying after undo', async () => {
+test('shot and aim rows stay visible while aiming, cancelling and retrying after undo', async () => {
   game.state = { lastLie: [0, -0.06, 0] };
   const listeners = new Map();
   const hud = { style: {} };
@@ -79,13 +79,16 @@ test('last shot stays visible while aiming, cancelling and retrying after undo',
 
   start();
   move(50);
-  assert.equal(hud.textContent, 'aim:       —');
+  assert.equal(hud.textContent, 'shot:         —\naim:          —');
+  move(100);
+  assert.equal(hud.textContent, 'shot:         —\naim:    180.00° · 100.00%');
   end('pointercancel');
-  assert.equal(hud.textContent, '');
+  assert.equal(hud.textContent, 'shot:         —\naim:          —');
 
   shoot(5, 0);
   const first = 'shot 1:   0.00° ·  50.00%';
-  assert.equal(hud.textContent, first);
+  const idle = '\naim:          —';
+  assert.equal(hud.textContent, first + idle);
   start();
   move(50);
   assert.equal(hud.textContent, `${first}\naim:          —`);
@@ -94,23 +97,23 @@ test('last shot stays visible while aiming, cancelling and retrying after undo',
   emit('pointerup', { pointerId: 2 });
   assert.equal(hud.textContent, `${first}\naim:    180.00° · 100.00%`);
   end('pointercancel');
-  assert.equal(hud.textContent, first);
+  assert.equal(hud.textContent, first + idle);
 
   start();
   move(100);
   end('pointerup');
-  assert.equal(hud.textContent, first);
+  assert.equal(hud.textContent, first + idle);
   shoot(0, -8);
-  assert.equal(hud.textContent, 'shot 2:  90.00° ·  80.00%');
+  assert.equal(hud.textContent, 'shot 2:  90.00° ·  80.00%' + idle);
   await emit('keydown', { key: 'z', target: canvas });
   const undone = 'back to shot 2 spot — you hit  90.00° ·  80.00%';
-  assert.equal(hud.textContent, undone);
+  assert.equal(hud.textContent, `${undone}\n${'aim: '.padEnd('back to shot 2 spot — you hit '.length)}      —`);
   start();
   move(100);
   assert.equal(hud.textContent, `${undone}\n${'aim: '.padEnd('back to shot 2 spot — you hit '.length)}180.00° · 100.00%`);
   end('pointerup');
   shoot(5, 0);
-  assert.equal(hud.textContent, 'shot 2:   0.00° ·  50.00%');
+  assert.equal(hud.textContent, 'shot 2:   0.00° ·  50.00%' + idle);
 
   const aligned = () => {
     const [previous, current] = hud.textContent.split('\n');
@@ -131,5 +134,5 @@ test('last shot stays visible while aiming, cancelling and retrying after undo',
   end('pointerup');
   const radians = 12.346 * Math.PI / 180;
   shoot(Math.cos(radians) * 3.4567, -Math.sin(radians) * 3.4567);
-  assert.equal(hud.textContent, 'shot 11:  12.35° ·  34.57%');
+  assert.equal(hud.textContent, 'shot 11:  12.35° ·  34.57%\naim:           —');
 });
