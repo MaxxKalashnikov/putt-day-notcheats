@@ -9,7 +9,8 @@ const source = readFileSync(`${__dirname}/../putt-day-notcheats.user.js`, 'utf8'
 
 async function load() {
   const physics = { position: [0, 0, 0] };
-  game.state = { lastLie: [0, -0.06, 0], teleport: null, phase: 'aiming', strokes: 0 };
+  game.setState = update => { game.state = update(game.state); };
+  game.state = { lastLie: [0, -0.06, 0], teleport: null, phase: 'aiming', strokes: 0, result: null };
   const listeners = new Map();
   const hud = { style: {}, append() {} };
   let divCount = 0;
@@ -47,7 +48,7 @@ async function load() {
     location: { origin },
     performance: { getEntriesByType: () => [{ name: `${origin}/assets/runtime-test.js` }] },
     WebAssembly: { Instance, instantiate: async () => new Instance() },
-    document: { createElement: tag => tag === 'form' ? form : ++divCount === 3 ? { style: {} } : hud, documentElement: { append() {} } },
+    document: { querySelector: () => null, createElement: tag => tag === 'form' ? form : tag !== 'div' ? { style: {} } : ++divCount === 3 ? { style: {} } : hud, documentElement: { append() {} } },
     addEventListener(type, listener) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(listener);
@@ -107,6 +108,16 @@ test('OOB after undo returns to the restored shot origin, not the previous landi
   const [x, y, z] = game.state.teleport;
   physics.position = [x, y + 0.06, z];
   assert.deepEqual(physics.position, origin, 'OOB must use the same restored origin');
+});
+
+test('undo leaves a completed practice ball in the cup', async () => {
+  const { physics, shoot, emit, canvas } = await load();
+  shoot(5, 0);
+  physics.position = [3, 2, 1];
+  game.setState(state => ({ ...state, phase: 'holed', result: { strokes: 1 } }));
+  await emit('keydown', { key: 'z', target: canvas });
+  assert.deepEqual(physics.position, [3, 2, 1]);
+  assert.equal(game.state.result, null);
 });
 
 test('unavailable game state leaves the ball and undo history intact for retry', async () => {

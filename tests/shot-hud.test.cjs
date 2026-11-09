@@ -8,6 +8,8 @@ const { runtime, game } = require('./fixtures/assets/runtime-test.js');
 const source = readFileSync(`${__dirname}/../putt-day-notcheats.user.js`, 'utf8');
 
 async function load() {
+  game.setState = update => { game.state = update(game.state); };
+  game.state = { phase: 'aiming', shots: [], strokes: 0, pendingShot: null, teleport: null, lastLie: [0, -0.06, 0], result: null };
   const listeners = new Map();
   const divs = [];
   const message = {};
@@ -77,12 +79,13 @@ async function load() {
     document: {
       createElement: tag => {
         if (tag === 'form') return form;
+        if (tag !== 'div') return { style: {} };
         const div = { style: {}, append(...children) { this.children = children; } };
         divs.push(div);
         return div;
       },
       documentElement: { append() {} },
-      querySelector: () => canvas,
+      querySelector: selector => selector === 'canvas' ? canvas : null,
     },
     addEventListener(type, listener) {
       if (!listeners.has(type)) listeners.set(type, []);
@@ -115,7 +118,6 @@ async function load() {
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
   runtime.ballPos = new Vector();
   runtime.aim = { active: false, pull: new Vector(), power: 0 };
-  game.state = { phase: 'aiming', shots: [], strokes: 0, pendingShot: null, teleport: null, lastLie: [0, -0.06, 0] };
   game.allowed = true;
   const events = [];
   canvas.dispatchEvent = event => {

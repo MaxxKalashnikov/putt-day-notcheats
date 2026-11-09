@@ -1,6 +1,6 @@
 # NOT cheats for putt.day
 
-Shot angle, power, ball position, camera heading, tilt and relative zoom for [putt.day](https://putt.day/), with `Z` to return to the previous shot's position and an optional per-object colored edge overlay.
+Practice-only shot angle, power, ball position, camera heading, tilt and relative zoom for [putt.day](https://putt.day/), with `Z` to return to the previous shot's position and an optional per-object colored edge overlay.
 Available as an installable userscript or an unpacked Chrome extension.
 
 [**Install userscript**](https://raw.githubusercontent.com/MaxxKalashnikov/putt-day-notcheats/master/putt-day-notcheats.user.js)
@@ -13,6 +13,27 @@ Undo restores both the ball position and the game's out-of-bounds return point; 
 Camera heading uses the same angle convention as shots; tilt is positive when looking down.
 Relative zoom is `4.4 / camera-to-ball distance`: `1.00×` at the default distance of 4.4 game units, `2.20×` at distance 2, and `0.37×` at distance 12.
 It appears once the ball is detected and changes as you scroll or pinch to zoom.
+
+## Practice only
+
+Loading the script makes every run practice-only, even if you never use an assist.
+A **Practice** badge beside the score counter identifies assisted runs.
+Its tooltip says that scores are disabled.
+Sinking the ball keeps it in the cup and opens a dialog saying "Now do it without assists ;)" instead of recording a result.
+Choose **Keep looking** to dismiss the dialog or **Practice again** to restart.
+Undo is disabled once the ball is holed.
+For a normal run, disable the script in your userscript manager or extension settings and fully reload the page.
+Restarting a hole does not turn practice mode off.
+
+The script removes results before game-state subscribers can see them.
+Separate guards hide native result overlays, reject local score writes and score/replay uploads, and drop multiplayer finish messages.
+Existing saved scores are not erased, but score syncing and replay creation are restricted while the script is loaded.
+Disable the script and reload before syncing scores or sharing saved replays.
+Do not use it in multiplayer, where blocked finish messages can leave other players waiting.
+If the completion guard cannot be installed, the script refuses to start the game's assisted physics.
+
+These guards target the current game implementation and may need updates when putt.day changes.
+They prevent completion with the unmodified script, not deliberate removal of its restrictions or repeating practiced shots without assists.
 
 ## Numeric shots
 

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         NOT cheats for putt.day
 // @namespace    https://github.com/MaxxKalashnikov/putt-day-notcheats
-// @version      1337.7.0
-// @description  Numeric shot controls, position and camera indicators, plus mesh edges. Z: undo. E/W/X: edges/mode/x-ray.
+// @version      1337.8.3
+// @description  Practice-only shot controls, undo and mesh edges. Assisted scores cannot be recorded.
 // @author       MaxxKalashnikov
 // @homepageURL  https://github.com/MaxxKalashnikov/putt-day-notcheats
 // @source       https://github.com/MaxxKalashnikov/putt-day-notcheats
@@ -18,11 +18,134 @@
 
 (() => {
   const KEY = 'z';
+  const practiceError = () => new DOMException('Scores and replays are disabled in practice mode.', 'NotAllowedError');
+
+  function scorePayload(value) {
+    if (!value || typeof value !== 'object') return false;
+    // TanStack server functions serialize object properties as parallel k/v arrays.
+    const keys = Array.isArray(value.k) && Array.isArray(value.v) ? value.k : Object.keys(value);
+    if (keys.includes('strokes') || keys.includes('runs') ||
+        (keys.includes('s') && keys.includes('p') && keys.some(key => ['n', 'hole', 'map'].includes(key)))) return true;
+    return Object.values(value).some(scorePayload);
+  }
+
+  if (typeof fetch === 'function') {
+    const nativeFetch = window.fetch;
+    window.fetch = async function (input, init) {
+      const url = new URL(input.url ?? input, location.href);
+      const method = (init?.method ?? input.method ?? 'GET').toUpperCase();
+      if (url.origin === location.origin && url.pathname.startsWith('/_serverFn/') && method === 'POST') {
+        const body = init?.body ?? (typeof input.clone === 'function' ? await input.clone().text() : null);
+        if (body != null && body !== '') {
+          let payload;
+          try { payload = JSON.parse(body); } catch { throw practiceError(); }
+          if (scorePayload(payload)) throw practiceError();
+        }
+      }
+      return nativeFetch.call(this, input, init);
+    };
+  }
+  if (typeof Storage !== 'undefined') {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (this === window.localStorage && String(key) === 'golf.stats.v1') throw practiceError();
+      return setItem.call(this, key, value);
+    };
+  }
+  if (typeof WebSocket !== 'undefined') {
+    const send = WebSocket.prototype.send;
+    WebSocket.prototype.send = function (data) {
+      if (new URL(this.url).host === location.host && typeof data === 'string') {
+        let message;
+        try { message = JSON.parse(data); } catch {}
+        if (message?.f === 1) return;
+      }
+      return send.call(this, data);
+    };
+  }
   const MAX_SHOT_SPEED = 10, MIN_PULL = 0.12, MAX_PULL = 1.8, BALL_RADIUS = 0.06;
   const stack = []; 
   let raw = null, hud = null, hudDetails = null, shotForm = null;
   let ball = null, numericShot = null, numericPointer = null, clearNumericPreview = null;
   let game = null, strokes;
+  const guardedGames = new WeakSet();
+  let practiceBanner = null, practiceDialog = null, practiceFinished = false, practiceFailure = false;
+
+  function practiceUI() {
+    if (typeof document === 'undefined' || !document.documentElement) return;
+    if (!practiceBanner) {
+      practiceBanner = document.createElement('aside');
+      practiceBanner.id = 'putt-notcheats-practice';
+      practiceBanner.className = 'pointer-events-auto shrink-0 rounded-xl bg-black/50 px-4 py-2 text-lg font-bold leading-tight text-white';
+      practiceBanner.style.zIndex = '2147483647';
+      const style = document.createElement('style');
+      // Backup for the game's daily, community and unlisted-hole result overlays.
+      style.textContent = '.pointer-events-auto.absolute.inset-0[class~="bg-black/45"] { display:none !important }' +
+        '#putt-notcheats-practice { position:fixed; top:16px; right:16px; white-space:nowrap }' +
+        '[data-overview-hud="top"] > div > #putt-notcheats-practice { position:static }' +
+        '#putt-notcheats-finish::backdrop { background:#0008 }' +
+        '#putt-notcheats-finish h2 { font-size:20px; font-weight:700; line-height:1.3; margin-bottom:12px }' +
+        '#putt-notcheats-finish p + p { margin-top:12px }' +
+        '#putt-notcheats-finish form { display:flex; flex-wrap:wrap; gap:10px; margin-top:20px }' +
+        '#putt-notcheats-finish button { flex:1; min-height:44px; padding:10px 14px; border:1px solid #ffffff40; border-radius:8px; background:#24443e; color:#fff; font:600 14px/1.4 system-ui; cursor:pointer }' +
+        '#putt-notcheats-finish button[value="restart"] { background:#34d399; color:#052e25; border-color:#34d399 }' +
+        '#putt-notcheats-finish button:hover { filter:brightness(1.15) }' +
+        '#putt-notcheats-finish button:focus-visible { outline:2px solid #6ee7b7; outline-offset:3px }';
+      document.documentElement.append(style, practiceBanner);
+    }
+    const scoreHud = document.querySelector('[data-overview-hud="top"] > .shrink-0');
+    if (scoreHud && practiceBanner.parentNode !== scoreHud) scoreHud.prepend(practiceBanner);
+    else if (!scoreHud && practiceBanner.parentNode !== document.documentElement) document.documentElement.append(practiceBanner);
+    practiceBanner.title = practiceFailure
+      ? 'Practice guard unavailable · disable the script and reload'
+      : game && guardedGames.has(game) ? 'Practice mode · scores disabled'
+      : 'Practice mode · waiting for completion guard';
+    practiceBanner.ariaLabel = practiceBanner.title;
+    practiceBanner.textContent = practiceFailure ? 'Practice unavailable' : 'Practice';
+    if (game?.state.phase !== 'holed') {
+      practiceFinished = false;
+      practiceDialog?.close();
+      return;
+    }
+    if (practiceFinished) return;
+    practiceFinished = true;
+    if (!practiceDialog) {
+      practiceDialog = document.createElement('dialog');
+      practiceDialog.id = 'putt-notcheats-finish';
+      practiceDialog.setAttribute('aria-labelledby', 'putt-notcheats-finish-title');
+      practiceDialog.style.cssText = 'position:fixed;inset:0;margin:auto;box-sizing:border-box;width:min(360px,calc(100vw - 32px));height:fit-content;max-height:calc(100dvh - 32px);overflow:auto;border:0;border-radius:16px;padding:24px;background:#11272b;color:#fff;font:16px/1.5 system-ui;text-align:center';
+      practiceDialog.innerHTML = '<h2 id="putt-notcheats-finish-title">Now do it without assists ;)</h2>' +
+        '<p>Practice complete. No score recorded.</p>' +
+        '<p>For a normal run, disable this script and fully reload the page.</p>' +
+        '<form method="dialog"><button autofocus>Keep looking</button> <button value="restart">Practice again</button></form>';
+      practiceDialog.addEventListener('close', () => {
+        if (practiceDialog.returnValue === 'restart') {
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r' }));
+        }
+      });
+      document.documentElement.append(practiceDialog);
+    }
+    practiceDialog.returnValue = '';
+    practiceDialog.showModal();
+  }
+
+  function guardGame(store) {
+    if (guardedGames.has(store)) return store;
+    if (!('result' in store.state) || typeof store.state.phase !== 'string') {
+      throw new Error('Cannot protect scores with this game version. Disable the script and reload.');
+    }
+    const setState = store.setState;
+    const guardedSetState = update => setState.call(store, state => {
+      const next = typeof update === 'function' ? update(state) : update;
+      // Keep the cup animation and frozen ball, but never expose a result to subscribers.
+      return next.result == null ? next : { ...next, result: null };
+    });
+    store.setState = guardedSetState;
+    if (store.setState !== guardedSetState) throw new Error('Cannot install the practice completion guard.');
+    guardedGames.add(store);
+    store.setState(state => state);
+    return store;
+  }
 
   const read = p => Array.from(new Float32Array(raw.memory.buffer, p + 4, 3));
   const take = p => { const v = read(p); raw.__wbg_rawvector_free(p, 0); return v; };
@@ -209,6 +332,7 @@
   }
 
   async function tick() {
+    practiceUI();
     try {
       game ??= await gameStore();
       if (game.state.strokes !== strokes) render();
@@ -274,9 +398,12 @@
   }
 
   const fake = inst => Object.create(WebAssembly.Instance.prototype, { exports: { value: hook(inst.exports) } });
-  const wrap = r => {
+  const wrap = async r => {
     const i = r instanceof WebAssembly.Instance ? r : r.instance;
-    if (!i.exports.rawrigidbodyset_rbApplyImpulse) return r; 
+    if (!i.exports.rawrigidbodyset_rbApplyImpulse) return r;
+    // Do not start assisted physics unless completion interception is installed.
+    try { game = await gameStore(); practiceFailure = false; }
+    catch (error) { practiceFailure = true; throw error; }
     return i === r ? fake(r) : { module: r.module, instance: fake(i) };
   };
   const inst = WebAssembly.instantiate, stream = WebAssembly.instantiateStreaming;
@@ -290,14 +417,14 @@
     const game = Object.values(await import(url)).find(value =>
       Array.isArray(value?.state?.lastLie) && typeof value.setState === 'function');
     if (!game) throw new Error('game return point unavailable');
-    return game;
+    return guardGame(game);
   }
 
   async function undo() {
     const s = stack.at(-1);
     if (!s || !raw) return;
     game = await gameStore();
-    if (stack.at(-1) !== s) return;
+    if (game.state.phase === 'holed' || stack.at(-1) !== s) return;
     const [x, y, z] = s.pos;
     // OOB uses lastLie, whose height excludes the ball radius, not the rigid body's centre.
     game.setState(state => ({ ...state, lastLie: [x, y - BALL_RADIUS, z] }));
@@ -342,6 +469,7 @@
     const runtime = values.find(value => value?.ballPos && value?.aim?.pull);
     const game = values.find(value => Array.isArray(value?.state?.shots) && 'pendingShot' in value.state);
     if (!runtime || !game) throw new Error('Numeric shots are unavailable with this game version.');
+    guardGame(game);
     return { runtime, game };
   }
 
