@@ -88,5 +88,5 @@ test('unavailable game state leaves the ball and undo history intact for retry',
   await emit('keydown', { key: 'z', target: canvas });
   assert.deepEqual(physics.position, [1, 2, 3]);
   assert.deepEqual(Array.from(game.state.lastLie), [1, 1.94, 3]);
-  assert.match(hud.textContent, /back to shot 1 spot/);
+  assert.match(hud.textContent, /undo 1:/);
 });

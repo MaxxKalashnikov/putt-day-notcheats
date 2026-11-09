@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NOT cheats for putt.day
 // @namespace    https://github.com/MaxxKalashnikov/putt-day-notcheats
-// @version      1337.5.0
+// @version      1337.6.0
 // @description  Shot, position and camera indicators, plus mesh edges. Z: undo. E/W/X: edges/mode/x-ray.
 // @author       MaxxKalashnikov
 // @homepageURL  https://github.com/MaxxKalashnikov/putt-day-notcheats
@@ -28,18 +28,23 @@
 
   const angleOf = (x, z) => (Math.atan2(-z, x) * 180 / Math.PI + 360) % 360;
   const fmt = s => `${s.angle.toFixed(2).padStart(6)}° · ${(s.power * 100).toFixed(2).padStart(6)}%`;
-  let shotLabel = 'shot:   ', status = '', aiming = '', where = '', view = '';
+  let shotLabel = 'shot:', status = '', aiming = '', where = '', view = '';
   function show(label, shot) { shotLabel = label; status = fmt(shot); aiming = ''; render(); }
   function render() {
     if (typeof document === 'undefined') return;
     if (!hud) {
       hud = document.createElement('div');
-      hud.style.cssText = 'position:fixed;top:8px;left:45%;z-index:2147483647;pointer-events:none;' +
+      hud.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;' +
         'font:13px/1.4 ui-monospace,monospace;color:#fff;background:#0009;padding:4px 8px;border-radius:6px;white-space:pre';
       document.documentElement.append(hud);
     }
-    hud.textContent = [shotLabel + (status || '—'.padStart(7)),
-      'aim: '.padEnd(shotLabel.length) + (aiming || '—'.padStart(7)), where, view].filter(Boolean).join('\n');
+    const rows = [[shotLabel.trimEnd(), status || '—'], ['aim:', aiming || '—'],
+      ['pos:', where], ['camera:', view]].filter(([, value]) => value);
+    // Reserve room for three-digit shot counts and a full camera readout.
+    const labelWidth = Math.max(9, ...rows.map(([label]) => label.length));
+    const valueWidth = Math.max(34, ...rows.map(([, value]) => value.length));
+    hud.textContent = rows.map(([label, value]) =>
+      label.padEnd(labelWidth + 1) + value.padStart(valueWidth)).join('\n');
   }
 
   function tick() {
@@ -48,7 +53,7 @@
       if (ball && raw) {
         position = take(raw.rawrigidbodyset_rbTranslation(ball.set, ball.h));
         const [x, y, z] = position;
-        const line = `pos: x ${x.toFixed(2)}  y ${y.toFixed(2)}  z ${z.toFixed(2)}`;
+        const line = `${x.toFixed(2).padStart(7)}x  ${y.toFixed(2).padStart(7)}y  ${z.toFixed(2).padStart(7)}z`;
         if (line !== where) { where = line; render(); }
       }
     } catch {}
@@ -64,7 +69,7 @@
         const p = cam.getWorldPosition(new V());
         const distance = position ? Math.hypot(p.x - position[0], p.y - position[1], p.z - position[2]) : 0;
         const zoom = distance > 0 ? `${(4.4 / distance).toFixed(2)}×` : '—';
-        line = `camera: ${heading} · tilt ${tilt.toFixed(1)}° · zoom: ${zoom}`;
+        line = `${heading.padStart(6)} · tilt ${tilt.toFixed(1).padStart(5)}° · zoom: ${zoom.padStart(5)}`;
       }
     } catch {}
     if (line !== view) { view = line; render(); }
@@ -127,7 +132,7 @@
     raw.rawrigidbodyset_rbSetAngvel(s.set, s.h, zero, true);
     raw.__wbg_rawvector_free(zero, 0);
     stack.pop();
-    show(`back to shot ${stack.length + 1} spot — you hit `, s);
+    show(`undo ${stack.length + 1}: `, s);
   }
 
   addEventListener('keydown', e => {

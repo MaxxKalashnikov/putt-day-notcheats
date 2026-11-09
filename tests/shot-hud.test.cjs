@@ -11,7 +11,15 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
   game.state = { lastLie: [0, -0.06, 0] };
   const listeners = new Map();
   const hud = { style: {} };
-  const memory = { buffer: new ArrayBuffer(4096) };
+  const assertHud = expected => {
+    assert.equal(hud.textContent.replace(/ +/g, ' '), expected.replace(/ +/g, ' '));
+    const rows = hud.textContent.split('\n');
+    assert.ok(rows.every(row => row.length === rows[0].length), 'values share a right edge');
+    assert.ok(rows.every(row => !row.startsWith(' ')), 'labels stay left aligned');
+    assert.equal(rows[0].length, 44, 'HUD width stays fixed');
+  };
+  let position = [0, 0, 0];
+  const memory = { buffer: new ArrayBuffer(16384) };
   let next = 0;
   const vector = (x, y, z) => {
     const p = next;
@@ -25,7 +33,7 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
     __wbg_rawvector_free() {},
     rawrigidbodyset_rbLinvel: () => vector(0, 0, 0),
     rawrigidbodyset_rbMass: () => 1,
-    rawrigidbodyset_rbTranslation: () => vector(0, 0, 0),
+    rawrigidbodyset_rbTranslation: () => vector(...position),
     rawrigidbodyset_rbApplyImpulse() {},
     rawrigidbodyset_rbSetTranslation() {},
     rawrigidbodyset_rbSetLinvel() {},
@@ -81,41 +89,41 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
 
   start();
   move(50);
-  assert.equal(hud.textContent, 'shot:         —\naim:          —');
+  assertHud('shot:         —\naim:          —');
   move(100);
-  assert.equal(hud.textContent, 'shot:         —\naim:    180.00° · 100.00%');
+  assertHud('shot:         —\naim:    180.00° · 100.00%');
   end('pointercancel');
-  assert.equal(hud.textContent, 'shot:         —\naim:          —');
+  assertHud('shot:         —\naim:          —');
 
   shoot(5, 0);
   const first = 'shot 1:   0.00° ·  50.00%';
   const idle = '\naim:          —';
-  assert.equal(hud.textContent, first + idle);
+  assertHud(first + idle);
   start();
   move(50);
-  assert.equal(hud.textContent, `${first}\naim:          —`);
+  assertHud(`${first}\naim:          —`);
   move(100);
-  assert.equal(hud.textContent, `${first}\naim:    180.00° · 100.00%`);
+  assertHud(`${first}\naim:    180.00° · 100.00%`);
   emit('pointerup', { pointerId: 2 });
-  assert.equal(hud.textContent, `${first}\naim:    180.00° · 100.00%`);
+  assertHud(`${first}\naim:    180.00° · 100.00%`);
   end('pointercancel');
-  assert.equal(hud.textContent, first + idle);
+  assertHud(first + idle);
 
   start();
   move(100);
   end('pointerup');
-  assert.equal(hud.textContent, first + idle);
+  assertHud(first + idle);
   shoot(0, -8);
-  assert.equal(hud.textContent, 'shot 2:  90.00° ·  80.00%' + idle);
+  assertHud('shot 2:  90.00° ·  80.00%' + idle);
   await emit('keydown', { key: 'z', target: canvas });
-  const undone = 'back to shot 2 spot — you hit  90.00° ·  80.00%';
-  assert.equal(hud.textContent, `${undone}\n${'aim: '.padEnd('back to shot 2 spot — you hit '.length)}      —`);
+  const undone = 'undo 2: 90.00° · 80.00%';
+  assertHud(undone + idle);
   start();
   move(100);
-  assert.equal(hud.textContent, `${undone}\n${'aim: '.padEnd('back to shot 2 spot — you hit '.length)}180.00° · 100.00%`);
+  assertHud(`${undone}\naim: 180.00° · 100.00%`);
   end('pointerup');
   shoot(5, 0);
-  assert.equal(hud.textContent, 'shot 2:   0.00° ·  50.00%' + idle);
+  assertHud('shot 2:   0.00° ·  50.00%' + idle);
 
   const aligned = () => {
     const [previous, current] = hud.textContent.split('\n');
@@ -136,13 +144,34 @@ test('shot and aim rows stay visible while aiming, cancelling and retrying after
   end('pointerup');
   const radians = 12.346 * Math.PI / 180;
   shoot(Math.cos(radians) * 3.4567, -Math.sin(radians) * 3.4567);
-  assert.equal(hud.textContent, 'shot 11:  12.35° ·  34.57%\naim:           —');
+  assertHud('shot 11:  12.35° ·  34.57%\naim:           —');
 
   context.document.querySelector = () => canvas;
   state.camera.getWorldDirection = () => ({ x: 0, y: -1, z: -1 });
   for (const [distance, zoom] of [[4.4, '1.00×'], [2, '2.20×'], [12, '0.37×'], [0, '—']]) {
     state.camera.getWorldPosition = () => ({ x: 0, y: distance, z: 0 });
     frame();
-    assert.equal(hud.textContent.split('\n').at(-1), `camera: 90.0° · tilt 45.0° · zoom: ${zoom}`);
+    assertHud(`shot 11: 12.35° · 34.57%\naim: —\npos: 0.00x 0.00y 0.00z\ncamera: 90.0° · tilt 45.0° · zoom: ${zoom}`);
   }
+
+  let columns;
+  for (const value of [1, 12, 123, -1, -12, -123]) {
+    position = [value, value, value];
+    const heading = Math.abs(value) * Math.PI / 180;
+    state.camera.getWorldDirection = () => ({ x: Math.cos(heading), y: Math.sign(value), z: -Math.sin(heading) });
+    state.camera.getWorldPosition = () => ({ x: value, y: value + 4.4, z: value });
+    frame();
+    const rows = hud.textContent.split('\n');
+    assert.ok(rows.every(row => row.length === 44), 'digit counts and signs do not resize the HUD');
+    const current = rows.slice(2).map(row => Array.from(row.matchAll(/\./g), match => match.index));
+    columns ??= current;
+    assert.deepEqual(current, columns, 'decimal points stay in fixed columns');
+  }
+  for (let i = 11; i < 100; i++) shoot(5, 0);
+  const details = hud.textContent.split('\n').slice(1).join('\n');
+  assertHud(`shot 100: 0.00° · 50.00%\n${details}`);
+  await emit('keydown', { key: 'z', target: canvas });
+  assertHud(`undo 100: 0.00° · 50.00%\n${details}`);
+  shoot(5, 0);
+  assertHud(`shot 100: 0.00° · 50.00%\n${details}`);
 });
